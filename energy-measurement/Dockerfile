@@ -14,20 +14,17 @@ WORKDIR /workspace
 
 # Two locks: the upstream job installs the current flake8 (push.yml:26) before
 # pinning it to 3.8.* (push.yml:27), so both versions must be available offline.
-# setup.py is resolved from a copy so its egg-info is not written into /workspace.
 # numpy<2: torch wheels below 2.3 are built against the numpy 1.x ABI.
 # --only-binary: newer spacy/thinc/blis ship no cp39 wheel; the original job installed wheels.
-RUN mkdir -p /wheels /tmp/meta && \
-    cp setup.py README.md /tmp/meta/ && \
+RUN mkdir -p /wheels && \
     printf '%s\n' 'black==22.*' 'flake8==3.8.*' 'sacrebleu' 'pip' 'setuptools' 'wheel' \
         > /wheels/extra.in && \
     printf '%s\n' 'numpy<2' > /wheels/constraints.txt && \
     uv pip compile --python-version 3.9 --generate-hashes \
         -c /wheels/constraints.txt \
         --only-binary spacy --only-binary thinc --only-binary blis \
-        /tmp/meta/setup.py requirements.opt.txt /wheels/extra.in \
+        setup.py requirements.opt.txt /wheels/extra.in \
         -o /wheels/requirements.lock && \
-    rm -rf /tmp/meta && \
     printf '%s\n' 'flake8' > /wheels/flake8-latest.in && \
     uv pip compile --python-version 3.9 --generate-hashes \
         /wheels/flake8-latest.in \
@@ -43,3 +40,14 @@ RUN mkdir -p /wheels /tmp/meta && \
 # The measured build stage runs the upstream pip commands unchanged, resolving
 # only from the local wheel directory.
 ENV PIP_NO_INDEX=1 PIP_FIND_LINKS=/wheels
+
+# Each stage runs in its own container, so the test and train stages need the
+# environment in the image; the build stage reinstalls it into a fresh venv.
+RUN python -m pip install --upgrade pip && \
+    pip install --upgrade setuptools && \
+    pip install -e . && \
+    pip install -r requirements.opt.txt && \
+    pip install sacrebleu && \
+    pip install flake8 && \
+    python -m pip install black==22.* flake8==3.8.* && \
+    if [ -f requirements.txt ]; then pip install -r requirements.txt; fi

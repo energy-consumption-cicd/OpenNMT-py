@@ -11,6 +11,8 @@ case "$STAGE" in
 
   # push.yml:21-28
   build)
+    python -m venv /tmp/venv-build
+    export PATH=/tmp/venv-build/bin:$PATH
     python -m pip install --upgrade pip
     pip install --upgrade setuptools
     pip install -e .

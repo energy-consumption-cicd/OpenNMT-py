@@ -70,7 +70,8 @@ continuous session, and no earlier result is reused.
 ## Stages
 
 Each stage runs in its own container from the repository root, so build
-artifacts do not survive into the later stages. Commands are copied verbatim
+artifacts do not survive into the later stages; the image itself carries the
+installed environment that `test` and `train` use (D9). Commands are copied verbatim
 from the upstream workflow `.github/workflows/push.yml`, job `lint-and-tests`
 (`ubuntu-latest`, Python 3.9).
 
@@ -94,6 +95,7 @@ Left out: the translation, generation and inference-engine steps (lines
 | D5 | The `requirements.txt` guard is kept literally although the file does not exist. | Literal fidelity to the upstream step. |
 | D7 | The main lock is resolved under the constraint `numpy<2` (1.26.4 instead of 2.0.2); every other pinned package is unchanged. | `torch` wheels below 2.3 are built against the numpy 1.x ABI; `torch.from_numpy` and `Tensor.numpy()` fail under numpy 2, and both are on the `train` path (GGNN encoder, validation scoring). |
 | D8 | `spacy`, `thinc` and `blis` are resolved with `--only-binary` (3.8.7, 8.3.4, 1.2.0 instead of the sdist-only 3.8.11, 8.3.9, 1.3.3). | Their newer releases publish no cp39 wheel while still declaring `>=3.9`, so an offline install would have to compile Cython extensions; the upstream job installed wheels when it ran. Every other pinned package has a wheel; `pyrouge` is the only sdist and is pure Python. |
+| D9 | The image ships the environment installed by the same eight `pip` commands, and the measured `build` stage reinstalls it into a fresh `python -m venv /tmp/venv-build` placed first on `PATH`. | Each stage runs in its own container; `test` and `train` need the packages the upstream job had installed in the same runner. The venv keeps the measured install complete rather than a no-op. |
 
 `torch` is installed from PyPI as upstream does (CUDA-enabled wheel with its
 `nvidia-*` dependencies); no `+cpu` substitution is made.
